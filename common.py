@@ -12,7 +12,7 @@ def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarra
     """Save data to a .itx file which can be dropped into Igor"""
 
     def check_axis_linear(arr: np.ndarray, axis: str, name: str, current_waves: list) -> bool:
-        if arr.shape[-1] > 1 and not np.all(np.isclose(np.diff(arr), np.diff(arr)[0])):
+        if arr.shape[-1] > 1 and not np.all(np.isclose(np.diff(arr), np.diff(arr)[0], rtol=0.001)):
             logging.warning(f"{file_path}: Igor doesn't support a non-linear {axis}-axis. Saving as separate wave")
             axis_wave = IgorWave(arr, name=name + f'_{axis}')
             current_waves.append(axis_wave)
@@ -74,6 +74,12 @@ def convert_to_4_setpoint_AW(aw: np.ndarray):
 def single_wave_masks(arbitrary_wave):
     """
     Generate mask waves for each part of the arbitrary wave applied during scan
+    
+    Args:
+        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
+       
+    Returns:
+        np.ndarray: Array of masks for single cycle of arbitrary wave
     """
     aw = arbitrary_wave
     lens = aw[1].astype(int)
@@ -83,6 +89,22 @@ def single_wave_masks(arbitrary_wave):
         m[s:s+lens[i]] = 1
         m[np.where(m == 0)] = np.nan
     return masks
+
+
+def full_wave_masks(arbitrary_wave: np.ndarray, num_steps: int, num_cycles=1) -> np.ndarray:
+    """
+    Returns full wave masks for arbitrary_wave
+    Args:
+        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
+        num_steps (int): How many DAC setpoints during sweep
+        num_cycles (int): How many full cycles of square wave per DAC step during sweep
+
+    Returns:
+        np.ndarray: An array of masks for AW (i.e. for 4 step wave, first dimension will be 4)
+    """
+    single_masks = single_wave_masks(arbitrary_wave)
+    full_masks = np.tile(single_masks, num_cycles * num_steps)
+    return full_masks
 
 
 def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],
@@ -255,5 +277,11 @@ def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: 
         logging.error(f'{e} while fitting')
         fit = None
     return fit
+
+
+
+
+
+
 
 
