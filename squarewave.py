@@ -30,7 +30,7 @@ class SquareProcessedData:
         """
         if data is None:
             data = self.averaged
-        parts = get_transition_parts(which)
+        parts = get_data_part_indexs(which)
         return np.nanmean(data[parts, :], axis=0)
     
     
@@ -265,7 +265,7 @@ def entropy_signal(data: np.ndarray) -> np.ndarray:
     return entropy_data
 
 
-def get_transition_parts(part: str) -> Union[tuple, int]:
+def get_data_part_indexs(part: str) -> Union[tuple, int]:
     if isinstance(part, str):
         part = part.lower()
         if part == 'cold':
@@ -285,7 +285,7 @@ def get_transition_parts(part: str) -> Union[tuple, int]:
     return parts
 
 
-def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
+def get_data_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
     """
     Returns the specified part of I_sense data (i.e. for square wave heating analysis)
     Args:
@@ -297,7 +297,7 @@ def get_transition_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
     """
     assert data.shape[-2] == 4  # If not 4, then it isn't square wave transition data
 
-    parts = get_transition_parts(part=part)
+    parts = get_data_part_indexs(part=part)
 
     data = np.take(data, parts, axis=-2)
     data = np.mean(data, axis=-2)

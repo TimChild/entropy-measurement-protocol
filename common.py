@@ -243,6 +243,12 @@ def i_sense(x, mid, theta, amp, lin, const):
     return -amp / 2 * np.tanh(arg) + lin * (x - mid) + const
 
 
+def entropy_weak(x, mid, theta, const, dS, dT):
+    """Entropy shape in weakly coupled limit"""
+    arg = ((x - mid) / (2 * theta))
+    return -dT * ((x - mid) / (2 * theta) - 0.5 * dS) * (np.cosh(arg)) ** (-2) + const
+
+
 def calculate_fit(x: np.ndarray, data: np.ndarray, params: lm.Parameters, func: Callable[[Any], float],
                   auto_bin=True, min_bins=1000,
                   method: str = 'leastsq',
