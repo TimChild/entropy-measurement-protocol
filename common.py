@@ -1,9 +1,10 @@
 import logging
 import numpy as np
 from igorwriter import IgorWave
-from typing import List, Optional, Union, Tuple, Callable, Any, Dict
+from typing import List, Optional, Union, Tuple, Callable, Any
 import lmfit as lm
 from scipy.interpolate import interp1d
+
 
 def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarray], names: List[str],
                      ys: Optional[List[np.ndarray]] = None,
@@ -45,66 +46,49 @@ def save_to_igor_itx(file_path: str, xs: List[np.ndarray], datas: List[np.ndarra
         for wave in waves:
             wave.save_itx(fp, image=True)  # Image = True hopefully makes np and igor match in x/y
 
-            
-def convert_to_4_setpoint_AW(aw: np.ndarray):
+
+def get_data_index(data1d: Union[np.ndarray, list], val: Union[float, list, tuple, np.ndarray], is_sorted: bool=False) \
+        -> Union[int, np.ndarray]:
     """
-    Takes a single AW (which may include ramping steps) and returns an AW with 4 setpoints only (0, +, 0, -)
+    Returns index position(s) of nearest data value(s) in 1d data.
     Args:
-        aw (np.ndarray):
+        is_sorted: If data1d is already sorted, set sorted = True to improve performance
+        data1d: data to compare values
+        val: value(s) to find index positions of
 
     Returns:
-        np.ndarray: AW with only 4 setpoints but same length as original
-    """
-    aw = np.asanyarray(aw)
-    assert aw.ndim == 2
-    full_len = np.sum(aw[1])
-    assert full_len % 4 == 0
-    new_aw = np.ndarray((2, 4), np.float32)
+        index value(s)
 
-    # split Setpoints/lens into 4 sections
-    for i, aw_chunk in enumerate(np.reshape(aw.swapaxes(0, 1), (4, -1, 2)).swapaxes(1, 2)):
-        sp = aw_chunk[0, -1]  # Last value of chunk (assuming each setpoint handles it's own ramp)
-        length = np.sum(aw_chunk[1])
-        new_aw[0, i] = sp
-        new_aw[1, i] = length
-    return new_aw
-
-            
-            
-def single_wave_masks(arbitrary_wave):
     """
-    Generate mask waves for each part of the arbitrary wave applied during scan
-    
-    Args:
-        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
-       
-    Returns:
-        np.ndarray: Array of masks for single cycle of arbitrary wave
-    """
-    aw = arbitrary_wave
-    lens = aw[1].astype(int)
-    masks = np.zeros((len(lens), np.sum(lens)), dtype=np.float16)
-    for i, m in enumerate(masks):
-        s = np.sum(lens[:i])
-        m[s:s+lens[i]] = 1
-        m[np.where(m == 0)] = np.nan
-    return masks
 
+    def find_nearest_index(array, value):
+        idx = np.searchsorted(array, value, side="left")
+        if idx > 0 and (idx == len(array) or abs(value - array[idx - 1]) < abs(
+                value - array[idx])):
+            return idx - 1
+        else:
+            return idx
 
-def full_wave_masks(arbitrary_wave: np.ndarray, num_steps: int, num_cycles=1) -> np.ndarray:
-    """
-    Returns full wave masks for arbitrary_wave
-    Args:
-        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
-        num_steps (int): How many DAC setpoints during sweep
-        num_cycles (int): How many full cycles of square wave per DAC step during sweep
+    data = np.asanyarray(data1d)
+    val = np.atleast_1d(np.asarray(val))
+    nones = np.where(val == None)
+    if nones[0].size != 0:
+        val[nones] = np.nan  # Just to not throw errors, will replace with Nones before returning
+    if data.ndim != 1:
+        raise ValueError(f'{data.ndim} is not 1D')
 
-    Returns:
-        np.ndarray: An array of masks for AW (i.e. for 4 step wave, first dimension will be 4)
-    """
-    single_masks = single_wave_masks(arbitrary_wave)
-    full_masks = np.tile(single_masks, num_cycles * num_steps)
-    return full_masks
+    if is_sorted is False:
+        arr_index = np.argsort(data)  # get copy of indexes of sorted data
+        data = np.sort(data)  # Creates copy of sorted data
+        index = arr_index[np.array([find_nearest_index(data, v) for v in val])]
+    else:
+        index = np.array([find_nearest_index(data, v) for v in val])
+    index = index.astype('O')
+    if nones[0].size != 0:
+        index[nones] = None
+    if index.shape[0] == 1:
+        index = index[0]
+    return index
 
 
 def center_data(x: np.ndarray, data: np.ndarray, centers: Union[List[float], np.ndarray],

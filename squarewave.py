@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import lmfit as lm
 import numpy as np
-from common import full_wave_masks, center_data, calculate_fit, i_sense
+from common import center_data, calculate_fit, i_sense
 from typing import Union, Optional, List
 import logging
 
@@ -306,3 +306,63 @@ def get_data_part(data: np.ndarray, part: Union[str, int]) -> np.ndarray:
 
 if __name__ == "__main__":
     print('Succesfully loaded')
+
+
+def convert_to_4_setpoint_AW(aw: np.ndarray):
+    """
+    Takes a single AW (which may include ramping steps) and returns an AW with 4 setpoints only (0, +, 0, -)
+    Args:
+        aw (np.ndarray):
+
+    Returns:
+        np.ndarray: AW with only 4 setpoints but same length as original
+    """
+    aw = np.asanyarray(aw)
+    assert aw.ndim == 2
+    full_len = np.sum(aw[1])
+    assert full_len % 4 == 0
+    new_aw = np.ndarray((2, 4), np.float32)
+
+    # split Setpoints/lens into 4 sections
+    for i, aw_chunk in enumerate(np.reshape(aw.swapaxes(0, 1), (4, -1, 2)).swapaxes(1, 2)):
+        sp = aw_chunk[0, -1]  # Last value of chunk (assuming each setpoint handles it's own ramp)
+        length = np.sum(aw_chunk[1])
+        new_aw[0, i] = sp
+        new_aw[1, i] = length
+    return new_aw
+
+
+def single_wave_masks(arbitrary_wave):
+    """
+    Generate mask waves for each part of the arbitrary wave applied during scan
+
+    Args:
+        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
+
+    Returns:
+        np.ndarray: Array of masks for single cycle of arbitrary wave
+    """
+    aw = arbitrary_wave
+    lens = aw[1].astype(int)
+    masks = np.zeros((len(lens), np.sum(lens)), dtype=np.float16)
+    for i, m in enumerate(masks):
+        s = np.sum(lens[:i])
+        m[s:s+lens[i]] = 1
+        m[np.where(m == 0)] = np.nan
+    return masks
+
+
+def full_wave_masks(arbitrary_wave: np.ndarray, num_steps: int, num_cycles=1) -> np.ndarray:
+    """
+    Returns full wave masks for arbitrary_wave
+    Args:
+        arbitrary_wave (np.ndarray): Row 0 = setpoint values, Row 1 = setpoint lenghts
+        num_steps (int): How many DAC setpoints during sweep
+        num_cycles (int): How many full cycles of square wave per DAC step during sweep
+
+    Returns:
+        np.ndarray: An array of masks for AW (i.e. for 4 step wave, first dimension will be 4)
+    """
+    single_masks = single_wave_masks(arbitrary_wave)
+    full_masks = np.tile(single_masks, num_cycles * num_steps)
+    return full_masks
