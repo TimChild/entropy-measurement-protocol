@@ -279,7 +279,7 @@ def get_data_part_indexs(part: str) -> Union[tuple, int]:
         else:
             raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     elif isinstance(part, int):
-        parts = part
+        parts = (part,)  # So that it follows the same format as other options
     else:
         raise ValueError(f'{part} not recognized. Should be in ["hot", "cold", "vp", "vm"]')
     return parts
